@@ -1,0 +1,21 @@
+{
+
+  "default-registry": {
+    "kind": "builtin",
+    "baseline": ""
+  },
+  "registries": [
+    {
+      "kind": "git",
+      "repository": "https://gitlab.com/colorglass/vcpkg-colorglass",
+      "baseline": "fa0e81f261580d3fd287853528cd82ffbac6ba1f",
+      "packages": [
+        "bethesda-skyrim-scripts",
+        "commonlibsse-ng",
+        "commonlibsse-ng-flatrim",
+        "script-extender-common",
+        "skse"
+      ]
+    }
+  ]
+}

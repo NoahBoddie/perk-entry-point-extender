@@ -78,10 +78,10 @@ void InitializeMessaging() {
 
 
 SKSEPluginLoad(const LoadInterface* skse) {
-#ifdef _DEBUG
-    
     InitializeLogging();
-    
+
+
+#ifdef _DEBUG    
     if (GetKeyState(VK_RCONTROL) & 0x800) {
         constexpr auto text1 = L"Request for debugger detected. If you wish to attach one and press Ok, do so now if not please press Cancel.";
         constexpr auto text2 = L"Debugger still not detected. If you wish to continue without one please press Cancel.";

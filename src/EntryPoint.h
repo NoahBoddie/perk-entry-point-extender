@@ -488,31 +488,60 @@ namespace PEPE
 
 			bool is_group = IsInGroup(perk, groupHeader);
 			auto result = 0;
+
+			int max_ranks = perk->data.numRanks;
+
+
 			for (auto& entry : perk->perkEntries)
 			{
 				//If if grouped, move rank into tag
 				// if not grouped, make tag 0
 
-				if (entry->GetType() != RE::PERK_ENTRY_TYPE::kEntryPoint)
-					continue;
+				if (!result)
+					max_ranks = 1;
+
 
 				auto& channel = GetChannel(entry);
+
+
+				if (entry->GetType() != RE::PERK_ENTRY_TYPE::kEntryPoint) {
+					
+					goto next;
+				}
+				
 
 				if (is_group && entry->header.rank > 0) {
 					//The rank represented the channel, so set it to zero with the rest of the ranks.
 					channel = entry->header.rank;
 					entry->header.rank = 0;
+
+					if (!result)
+						max_ranks = 1;
+
 					result++;
-					logger::info("{}", perk->data.numRanks);
+					
 				}
 				else {
 					//channel of zero means it acts like a regular perk entry.
 					channel = 0;
+
+				next:
+					int new_ranks = entry->header.rank + 1;
+					max_ranks = new_ranks > max_ranks ? new_ranks : max_ranks;
+					continue;
 				}
+
+
 
 				//edit the num of ranks here\
 
 				//Addition idea right here, use some of the padding on perk data (and confirm it's padding) to store what index to look for groups.
+			}
+
+			if (result) {//The ranks were a dream, they never existed
+				perk->data.numRanks = max_ranks;
+				logger::info("rank of {}, {}", perk->GetName(), perk->data.numRanks);
+
 			}
 
 			return result;

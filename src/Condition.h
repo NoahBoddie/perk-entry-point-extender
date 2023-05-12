@@ -26,7 +26,7 @@ namespace PEPE
 			{
 
 			}
-		} static _data;
+		};
 
 		//Remember to reinterpret_cast the handles so it doesn't fuck up when sending it back.
 		// It's just a linear climb, there's no way 4294967295 ACTUALLY gets used up, especially when I'm not serializing

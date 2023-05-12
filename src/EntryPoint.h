@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Condition.h"
 
 const char* GetFormEditorID(RE::TESForm* form)
 {

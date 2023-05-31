@@ -2,33 +2,61 @@
 
 #include "Condition.h"
 
+//-1 is not init, 0 is not installed, 1 is installed and ready
+inline int g_EditorIDs = -1;
+
+using GetFormEditorID__Func = const char* (*)(RE::FormID);
+
+
+bool CheckExternFunc(GetFormEditorID__Func& func)
+{
+	if (!func)
+	{
+		HINSTANCE PLUGIN = GetModuleHandle(L"po3_Tweaks.dll");
+
+		//TODO: Look into the other Editor ID caching system
+		if (PLUGIN == nullptr) {
+			if (static unsigned int once = 0; once++)
+				logger::warn("'po3_Tweaks.dll' not found, categories cannot be established without it.");
+			
+			g_EditorIDs = -1;
+			
+			return false;
+		}
+
+		//TODO:Actually make sure po3_Tweaks exists first.
+		func = (GetFormEditorID__Func)GetProcAddress(PLUGIN, "GetFormEditorID");
+
+		if (!func) {
+			if (static unsigned int once = 0; once++)
+				logger::error("'GetFormEditorID' not found within po3_Tweaks.");
+			
+			g_EditorIDs = -1;
+			
+			return false;
+		}
+		
+		g_EditorIDs = 1;
+	}
+
+	return func != nullptr;
+
+}
+
 const char* GetFormEditorID(RE::TESForm* form)
 {
-	using GetFormEditorID__Func = const char* (*)(RE::FormID);
 	
+
 	static GetFormEditorID__Func extern_func = nullptr;
 
-
-	HINSTANCE PLUGIN = GetModuleHandle(L"po3_Tweaks.dll");
-
-	//TODO: Look into the other Editor ID caching system
-	if (PLUGIN == nullptr) {
-		if (static unsigned int once = 0; once++)
-			logger::error("'po3_Tweaks.dll' not found, categories cannot be established without it.");
-		return nullptr;
+	if (!extern_func)
+	{
+		CheckExternFunc(extern_func);
 	}
 
-	//TODO:Actually make sure po3_Tweaks exists first.
-	extern_func = (GetFormEditorID__Func)GetProcAddress(PLUGIN, "GetFormEditorID");
+	
 
-	if (!extern_func) {
-		if (static unsigned int once = 0; once++)
-			logger::error("'GetFormEditorID' not found within po3_Tweaks.");
-
-		return nullptr;
-	}
-
-	return (const char*)extern_func(form->formID);
+	return extern_func ? extern_func(form->formID) : nullptr;
 }
 
 
@@ -305,7 +333,9 @@ namespace PEPE
 
 		static bool IsInGroup(RE::BGSPerk* perk, std::string_view group_id)
 		{
-
+			if (!g_EditorIDs){
+				return false;
+			}
 			//std::string_view editor_id = perk->GetFormEditorID();
 			std::string_view editor_id = GetFormEditorID(perk);
 

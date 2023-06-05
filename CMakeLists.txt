@@ -28,6 +28,7 @@ set(sources
         src/EntryPoint.h
         src/Papyrus.h
         src/Hooks.h
+        src/PerkEntryPointExtenderAPI.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
 
 source_group(

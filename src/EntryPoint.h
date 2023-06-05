@@ -8,7 +8,7 @@ inline int g_EditorIDs = -1;
 using GetFormEditorID__Func = const char* (*)(RE::FormID);
 
 
-bool CheckExternFunc(GetFormEditorID__Func& func)
+inline bool CheckExternFunc(GetFormEditorID__Func& func)
 {
 	if (!func)
 	{
@@ -43,7 +43,7 @@ bool CheckExternFunc(GetFormEditorID__Func& func)
 
 }
 
-const char* GetFormEditorID(RE::TESForm* form)
+inline const char* GetFormEditorID(RE::TESForm* form)
 {
 	
 
@@ -62,23 +62,6 @@ const char* GetFormEditorID(RE::TESForm* form)
 
 namespace PEPE
 {
-	//TODO:Want something to print the errors for RequestResult
-	//TODO:Move RequestResult to API
-	enum struct RequestResult
-	{
-		Success = -1,//Success is negative one because it makes it easier to add new things.
-		InvalidAPI,
-		Unsupported,
-		UnmatchedArgs,
-		BadFormArg,
-		BadEntryPoint,
-		BadString,
-		NoActor,
-		InvalidActor,//Should be used if the source in activate is the wrong dude
-
-
-	};
-
 	using Channel = uint16_t;
 
 	
@@ -400,6 +383,15 @@ namespace PEPE
 				return RequestResult::Unsupported;
 			}
 
+
+			bool use_out = IsOutRequired(entry_point);
+
+			if (use_out && !out) {
+				logger::debug("entry point requires out, no out detected.");
+				return RequestResult::InvalidOut;
+			}
+
+
 			if (entry_point == RE::PerkEntryPoint::kAddLeveledListOnDeath)
 				args.push_back(args.back());//adjusting the size for this wacky ass perk entry
 
@@ -459,7 +451,8 @@ namespace PEPE
 
 			if (auto param_count = GetEntryPointTargetCount(entry_point); args.size() == param_count)
 			{
-				bool use_out = IsOutRequired(entry_point);
+
+
 
 				switch (param_count)
 				{

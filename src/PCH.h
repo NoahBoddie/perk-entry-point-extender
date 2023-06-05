@@ -107,7 +107,7 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
 
-#include "PerkEntryPointExtenderAPI.h"
+
 
 // Compatible declarations with other sample projects.
 #define DLLEXPORT __declspec(dllexport)
@@ -118,6 +118,10 @@ using namespace std::literals;
 using namespace REL::literals;
 
 namespace logger = SKSE::log;
+
+#define PEPE_SOURCE 1
+
+#include "PerkEntryPointExtenderAPI.h"
 
 constexpr std::array<int32_t, 4> version{ 1, 0, 0, 2 };
 

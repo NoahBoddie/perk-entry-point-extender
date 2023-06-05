@@ -33,8 +33,11 @@ namespace PEPE
 			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, RE::BSFixedString category, int32_t channel, int32_t handle)
 		{
 			logger::info("hit");
-			
+
+			RE::HandleEntryPoint(RE::PerkEntryPoint::kAllowMountActor, target, std::nullopt);
 			auto result = EntryPointHandler::ApplyPerkEntryPoint(target, entry_point, args, nullptr, category, channel);
+			auto nult = nullptr;
+			const void* test = std::addressof(std::nullopt);
 
 			if (result == RequestResult::Success)
 				return;

@@ -180,7 +180,7 @@ namespace PerkEntryPointExtenderAPI
 
 namespace RE
 {
-
+	//&& strings will no longer count. Probably only string references, and string_views.
 
 	//Within the api function, I require the ability to know if the out parameter is a vector or not.
 	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner,
@@ -203,7 +203,7 @@ namespace RE
 
 
 	template <class O, std::derived_from<RE::TESForm>... Args>
-	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, std::string category, uint8_t channel, Args*... a_args)
+	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, std::string& category, uint8_t channel, Args*... a_args)
 	{
 		constexpr bool no_out = std::is_same_v<std::nullopt_t, O>;
 
@@ -228,22 +228,28 @@ namespace RE
 	
 
 	template <class O, std::derived_from<RE::TESForm>... Args>
-	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, std::string category, Args*... a_args)
+	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, std::string&& category, Args*... a_args)
 	{
 		//Convienent if categories have no channeled distinctions.
 		return HandleEntryPoint(a_entryPoint, a_perkOwner, out, category, 255, a_args...);
 	}
 
+	template <class O, std::derived_from<RE::TESForm>... Args>
+	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, std::string&& category, uint8_t channel, Args*... a_args)
+	{
+		return HandleEntryPoint(a_entryPoint, a_perkOwner, out, category, 255, a_args...);
+	}
+
 
 	template <class O, std::derived_from<RE::TESForm>... Args>
-	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, std::string_view category, uint8_t channel, Args*... a_args)
+	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, std::string_view& category, uint8_t channel, Args*... a_args)
 	{
 		return HandleEntryPoint(a_entryPoint, a_perkOwner, out, std::string{ category }, channel, a_args...);
 	}
 
 
 	template <class O, std::derived_from<RE::TESForm>... Args>
-	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, std::string_view category, Args*... a_args)
+	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, std::string_view& category, Args*... a_args)
 	{
 		//Convienent if categories have no channeled distinctions.
 		return HandleEntryPoint(a_entryPoint, a_perkOwner, out, std::string{ category }, 255, a_args...);

@@ -34,11 +34,8 @@ namespace PEPE
 		{
 			logger::info("hit");
 
-			RE::HandleEntryPoint(RE::PerkEntryPoint::kAllowMountActor, target, std::nullopt);
 			auto result = EntryPointHandler::ApplyPerkEntryPoint(target, entry_point, args, nullptr, category, channel);
-			auto nult = nullptr;
-			const void* test = std::addressof(std::nullopt);
-
+			
 			if (result == RequestResult::Success)
 				return;
 

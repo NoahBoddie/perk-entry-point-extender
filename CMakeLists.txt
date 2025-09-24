@@ -6,7 +6,7 @@ message("Using toolchain file ${CMAKE_TOOLCHAIN_FILE}.")
 ########################################################################################################################
 project(
         PerkEntryPointExtender
-        VERSION 1.0.0
+        VERSION 2.2.3.4
         DESCRIPTION "Expands entry points and exposes them through papyrus functions."
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
@@ -28,6 +28,8 @@ set(sources
         src/EntryPoint.h
         src/Papyrus.h
         src/Hooks.h
+        src/Handle.h
+        src/Utility.h
         src/PerkEntryPointExtenderAPI.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
 
@@ -47,6 +49,7 @@ message("\tTests: ${BUILD_TESTS}")
 ########################################################################################################################
 ## Configure target DLL
 ########################################################################################################################
+find_package(directxtk CONFIG REQUIRED)
 find_package(CommonLibSSE CONFIG REQUIRED)
 
 

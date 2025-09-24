@@ -1,6 +1,7 @@
 #include "Hooks.h"
 #include "EntryPoint.h"
 #include "Papyrus.h"
+#include "Utility.h"
 
 using namespace SKSE;
 using namespace SKSE::log;
@@ -56,10 +57,12 @@ void InitializeLogging()
 
 
 void InitializeMessaging() {
+    RE::BSSimpleList<RE::ExtraDataList*> test;
+
     if (!GetMessagingInterface()->RegisterListener([](MessagingInterface::Message* message) {
         switch (message->type) {
         case MessagingInterface::kPostLoad:
-            
+            PEPE::ScrambugsPatch();
             break;
             // It is now safe to do multithreaded operations, or operations against other plugins.
 
@@ -99,8 +102,8 @@ SKSEPluginLoad(const LoadInterface* skse) {
     const auto* plugin = PluginDeclaration::GetSingleton();
     auto version = plugin->GetVersion();
     log::info("{} {} is loading...", plugin->GetName(), version);
-    Init(skse);
-   
+    Init(skse, false);
+    
 
     //TODO:Use message system to tell if po3 tweaks is present and the editor ID patch as been enabled
     InitializeMessaging();
@@ -109,7 +112,6 @@ SKSEPluginLoad(const LoadInterface* skse) {
     PEPE::Hooks::Install();
 
     auto papyrus = SKSE::GetPapyrusInterface();
-    
     
     if (papyrus && papyrus->Register(PEPE::Papyrus::Install) == true) {
         log::debug("Papyrus functions bound.");
@@ -122,3 +124,6 @@ SKSEPluginLoad(const LoadInterface* skse) {
     
     return true;
 }
+
+
+

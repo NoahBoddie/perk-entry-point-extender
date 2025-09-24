@@ -1,22 +1,34 @@
 #pragma once
 
+#include "Handle.h"
+#include "Utility.h"
+#include "EntryPoint.h"
 namespace PEPE
 {
-
-	using SkyrimVM = RE::BSScript::IVirtualMachine;
 
 
 	class Papyrus
 	{
 	public:
+
 		static bool Install(SkyrimVM* a_vm)
 		{
+
 			a_vm->RegisterFunction("ApplyPerkEntryPoint", "PerkEntryPointExtender", ApplyPerkEntryPoint);
 			a_vm->RegisterFunction("ApplyPerkEntryPointForm", "PerkEntryPointExtender", ApplyPerkEntryPointForm);
 			a_vm->RegisterFunction("ApplyPerkEntryPointSpell", "PerkEntryPointExtender", ApplyPerkEntryPointSpell);
 			a_vm->RegisterFunction("ApplyPerkEntryPointFloat", "PerkEntryPointExtender", ApplyPerkEntryPointFloat);
 			a_vm->RegisterFunction("ApplyPerkEntryPointString", "PerkEntryPointExtender", ApplyPerkEntryPointString);
 			
+			
+			
+			a_vm->RegisterFunction("CloseHandle", "PerkEntryPointExtender", CloseHandle);
+			a_vm->RegisterFunction("CreateHandle", "PerkEntryPointExtender", CreateHandle);
+			a_vm->RegisterFunction("ValidateHandle", "PerkEntryPointExtender", ValidateHandle);
+			a_vm->RegisterFunction("SetHandleItemForm", "PerkEntryPointExtender", SetHandleItemForm);
+			a_vm->RegisterFunction("SetHandleItemBool", "PerkEntryPointExtender", SetHandleItemBool);
+			a_vm->RegisterFunction("SetHandleItemString", "PerkEntryPointExtender", SetHandleItemString);
+
 			
 			a_vm->RegisterFunction("GetVersion", "PerkEntryPointExtender", GetVersion);
 
@@ -29,65 +41,38 @@ namespace PEPE
 
 		//This is effectively only used for add leveled list. Also of note, what the fuck is with that, is it 4 params or 3?
 		// It only seems to use 3, but WHAT THE FUCK, the forth is NEVER used. Or shouldn't
-		static inline void ApplyPerkEntryPoint(SkyrimVM* a_vm, RE::VMStackID a_stackID, RE::StaticFunctionTag*,
+		static inline void ApplyPerkEntryPoint(SkyrimVM* vm, RE::VMStackID stack_id, RE::StaticFunctionTag*,
 			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, RE::BSFixedString category, int32_t channel, int32_t handle)
 		{
-			logger::info("hit");
-
-			auto result = EntryPointHandler::ApplyPerkEntryPoint(target, entry_point, args, nullptr, category, channel);
-			
-			if (result == RequestResult::Success)
-				return;
-
-			logger::info("{}", (int)result);
+			EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, nullptr, category, channel, handle);
 		}
 		
 		
-		static inline std::vector<RE::TESForm*> ApplyPerkEntryPointForm(SkyrimVM* a_vm, RE::VMStackID a_stackID, RE::StaticFunctionTag*,
+		static inline std::vector<RE::TESForm*> ApplyPerkEntryPointForm(SkyrimVM* vm, RE::VMStackID stack_id, RE::StaticFunctionTag*,
 			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, RE::BSFixedString category, int32_t channel, int32_t handle)
 		{
-			constexpr bool kernels_fix = false;
-
 			//By default has a capacity of 1 so if kernel's fix is not installed, I can just give data.
 			std::vector<RE::TESForm*> out{1};
+			
+			auto result = EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, kernels_fix ? &out : (void*)out.data(), category, channel, handle);
 
-			RequestResult result;
-			if (kernels_fix)
-				result = EntryPointHandler::ApplyPerkEntryPoint(target, entry_point, args, &out, category, channel);
-			else
-				result = EntryPointHandler::ApplyPerkEntryPoint(target, entry_point, args, out.data(), category, channel);
-
-			//Don't seem like there's anything that should be different. I will need to print later.
-			//if (result == RequestResult::Success)
-			//	...;
-
-			return out;
+			return result ? out : std::vector<RE::TESForm*>{};
 		}
 
 		//Same as the above.
-		static inline std::vector<RE::SpellItem*> ApplyPerkEntryPointSpell(SkyrimVM* a_vm, RE::VMStackID a_stackID, RE::StaticFunctionTag*,
+		static inline std::vector<RE::SpellItem*> ApplyPerkEntryPointSpell(SkyrimVM* vm, RE::VMStackID stack_id, RE::StaticFunctionTag*,
 			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, RE::BSFixedString category, int32_t channel, int32_t handle)
 		{
-			constexpr bool kernels_fix = false;
-
 			//By default has a capacity of 1 so if kernel's fix is not installed, I can just give data.
 			std::vector<RE::SpellItem*> out{ 1 };
+			
+			auto result = EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, kernels_fix ? &out : (void*)out.data(), category, channel, handle);
 
-			RequestResult result;
-			if (kernels_fix)
-				result = EntryPointHandler::ApplyPerkEntryPoint(target, entry_point, args, &out, category, channel);
-			else
-				result = EntryPointHandler::ApplyPerkEntryPoint(target, entry_point, args, out.data(), category, channel);
-
-			//Don't seem like there's anything that should be different. I will need to print later.
-			//if (result == RequestResult::Success)
-			//	...;
-
-			return out;
+			return result ? out : std::vector<RE::SpellItem*>{};
 		}
 
 
-		static inline float ApplyPerkEntryPointFloat(SkyrimVM* a_vm, RE::VMStackID a_stackID, RE::StaticFunctionTag*,
+		static inline float ApplyPerkEntryPointFloat(SkyrimVM* vm, RE::VMStackID stack_id, RE::StaticFunctionTag*,
 			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, float base_value, RE::BSFixedString category, int32_t channel, int32_t handle)
 		{
 			
@@ -97,27 +82,91 @@ namespace PEPE
 
 
 
-			auto result = EntryPointHandler::ApplyPerkEntryPoint(target, entry_point, args, &base_value, category, channel);
+			EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, &base_value, category, channel, handle);
 
-			if (result == RequestResult::Success)
-				return base_value;
-
-			return -1;//temporary, want to make an error value.
+			return base_value;//temporary, want to make an error value.
 		}
 		
 		
-		static inline RE::BSFixedString ApplyPerkEntryPointString(SkyrimVM* a_vm, RE::VMStackID a_stackID, RE::StaticFunctionTag*,
+		static inline RE::BSFixedString ApplyPerkEntryPointString(SkyrimVM* vm, RE::VMStackID stack_id, RE::StaticFunctionTag*,
 			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, RE::BSFixedString or_value, RE::BSFixedString category, int32_t channel, int32_t handle)
 		{
 			const char* out = nullptr;
 
-			auto result = EntryPointHandler::ApplyPerkEntryPoint(target, entry_point, args, &out, category, channel);
+			auto result = EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, &out, category, channel, handle);
 
-			if (result == RequestResult::Success)
-				return out;
-
-			return or_value;
+			return result ? out : or_value;
 		}
+
+
+
+
+		static int32_t CreateHandle(SkyrimVM* a_vm, RE::VMStackID a_stackID, RE::StaticFunctionTag*)
+		{
+			return HandleManager::CreateHandle();
+		}
+
+
+		static bool CloseHandle(SkyrimVM* a_vm, RE::VMStackID a_stackID, RE::StaticFunctionTag*,
+			int32_t id)
+		{
+			return HandleManager::CloseHandle(id);
+		}
+
+
+		static int32_t ValidateHandle(SkyrimVM* a_vm, RE::VMStackID a_stackID, RE::StaticFunctionTag*,
+			int32_t id)
+		{
+			return HandleManager::GetHandle(id) ? id : HandleManager::CreateHandle();
+		}
+
+		static int32_t SetHandleItemForm(SkyrimVM* a_vm, RE::VMStackID a_stackID, RE::StaticFunctionTag*,
+			int32_t id, RE::BSFixedString name, RE::TESForm* form)
+		{
+			//returns 1 on success, 0 if handle does not exist, -1 if the field name doesn't exist and -2 if the parameter is invalid.
+
+			Handle* handle = HandleManager::GetHandle(id);
+
+			if (handle) {
+				return 0;
+			}
+
+			return handle->SetHandleItem(name, form);
+
+		}
+
+
+		static int32_t SetHandleItemString(SkyrimVM* a_vm, RE::VMStackID a_stackID, RE::StaticFunctionTag*,
+			int32_t id, RE::BSFixedString name, RE::BSFixedString string)
+		{
+			//returns 1 on success, 0 if handle does not exist, -1 if the field name doesn't exist and -2 if the parameter is invalid.
+
+			Handle* handle = HandleManager::GetHandle(id);
+
+			if (handle) {
+				return 0;
+			}
+
+			return handle->SetHandleItem(name, string);
+		}
+
+
+		static int32_t SetHandleItemBool(SkyrimVM* a_vm, RE::VMStackID a_stackID, RE::StaticFunctionTag*,
+			int32_t id, RE::BSFixedString name, bool value)
+		{
+			//returns 1 on success, 0 if handle does not exist, -1 if the field name doesn't exist and -2 if the parameter is invalid.
+
+			Handle* handle = HandleManager::GetHandle(id);
+
+			if (handle) {
+				return 0;
+			}
+
+			return handle->SetHandleItem(name, value);
+		}
+
+
+
 
 		static inline std::vector<int32_t> GetVersion(SkyrimVM* a_vm, RE::VMStackID a_stackID, RE::StaticFunctionTag*)
 		{

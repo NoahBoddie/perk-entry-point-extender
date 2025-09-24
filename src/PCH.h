@@ -107,6 +107,7 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
 
+#include "magic_enum.hpp"
 
 
 // Compatible declarations with other sample projects.
@@ -119,14 +120,15 @@ using namespace REL::literals;
 
 namespace logger = SKSE::log;
 
-#define PEPE_SOURCE 1
-
 #include "PerkEntryPointExtenderAPI.h"
 
+#include "Utility.h"
+
+//TODO: Get rid of this
 constexpr std::array<int32_t, 4> version{ 1, 0, 0, 2 };
 
 namespace util {
     using SKSE::stl::report_and_fail;
 }
 
-#define RELOCATION_OFFSET(SE, AE) REL::VariantOffset(SE, AE, 0).offset()
+#define RELOCATION_OFFSET(SE, AE) REL::VariantOffset(SE, AE, SE).offset()

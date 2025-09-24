@@ -1,70 +1,18 @@
 #pragma once
 
+#include "Handle.h"
 #include "Condition.h"
 
-//-1 is not init, 0 is not installed, 1 is installed and ready
-inline int g_EditorIDs = -1;
 
-using GetFormEditorID__Func = const char* (*)(RE::FormID);
-
-
-inline bool CheckExternFunc(GetFormEditorID__Func& func)
-{
-	if (!func)
-	{
-		HINSTANCE PLUGIN = GetModuleHandle(L"po3_Tweaks.dll");
-
-		//TODO: Look into the other Editor ID caching system
-		if (PLUGIN == nullptr) {
-			if (static unsigned int once = 0; once++)
-				logger::warn("'po3_Tweaks.dll' not found, categories cannot be established without it.");
-			
-			g_EditorIDs = -1;
-			
-			return false;
-		}
-
-		//TODO:Actually make sure po3_Tweaks exists first.
-		func = (GetFormEditorID__Func)GetProcAddress(PLUGIN, "GetFormEditorID");
-
-		if (!func) {
-			if (static unsigned int once = 0; once++)
-				logger::error("'GetFormEditorID' not found within po3_Tweaks.");
-			
-			g_EditorIDs = -1;
-			
-			return false;
-		}
-		
-		g_EditorIDs = 1;
-	}
-
-	return func != nullptr;
-
-}
-
-inline const char* GetFormEditorID(RE::TESForm* form)
-{
-	
-
-	static GetFormEditorID__Func extern_func = nullptr;
-
-	if (!extern_func)
-	{
-		CheckExternFunc(extern_func);
-	}
-
-	
-
-	return extern_func ? extern_func(form->formID) : nullptr;
-}
+inline std::unordered_map<RE::BGSPerk*, std::string> legacyEditorIDs;
 
 
 namespace PEPE
 {
 	using Channel = uint16_t;
 
-	
+
+
 
 	struct EntryPointHandler
 	{
@@ -172,9 +120,6 @@ namespace PEPE
 			"Allow Mount Actor"
 		};
 
-		static constexpr std::string_view groupHeader = "GROUP__";
-
-
 		static Channel& GetChannel(RE::BGSPerkEntry* a_this)
 		{
 			return a_this->header.unk2;
@@ -196,8 +141,8 @@ namespace PEPE
 
 		static constexpr int GetEntryPointTargetCount(RE::PerkEntryPoint entry_point)
 		{
-			//outsiders should use 1 only, but the function actually uses 2.
-			if (entry_point == RE::PerkEntryPoint::kAddLeveledListOnDeath) return 2;
+			//papyrus users should use 2 to comply with the look, but the function takes a form as its "out", so it's value is 1.
+			if (entry_point == RE::PerkEntryPoint::kAddLeveledListOnDeath) return 1;
 
 			switch (entry_point)
 			{
@@ -283,6 +228,8 @@ namespace PEPE
 			case RE::PerkEntryPoint::kModAddictionDuration:
 			case RE::PerkEntryPoint::kModTelekinesisDistance:
 			case RE::PerkEntryPoint::kModTelekinesisDamageMult:
+			case RE::PerkEntryPoint::kModSkillUse:
+
 				return 0;
 			}
 
@@ -293,7 +240,7 @@ namespace PEPE
 		{
 			switch (entry_point)
 			{
-			case RE::PerkEntryPoint::kAddLeveledListOnDeath:
+			//case RE::PerkEntryPoint::kAddLeveledListOnDeath:
 			case RE::PerkEntryPoint::kActivate:
 				return false;
 
@@ -314,19 +261,10 @@ namespace PEPE
 			}
 		}
 
-		static bool IsInGroup(RE::BGSPerk* perk, std::string_view group_id)
+		static bool IsInGroup(std::string_view editor_id, std::string_view group_id)
 		{
-			if (!g_EditorIDs){
-				return false;
-			}
-			//std::string_view editor_id = perk->GetFormEditorID();
-			std::string_view editor_id = GetFormEditorID(perk);
-
-			//if (editor_id.empty())
-			//	logger::info("empty");
-			
 			auto end = editor_id.end();
-
+			
 			auto it = std::search(editor_id.begin(), editor_id.end(),
 				group_id.begin(), group_id.end(),
 				[](const char ch1, const char ch2) { return std::toupper(ch1) == std::toupper(ch2); });
@@ -334,13 +272,36 @@ namespace PEPE
 			return it != end;
 		}
 
-		static bool IsInGroup(RE::BGSPerk* perk, std::string& group_id)
+		static bool IsInGroup(RE::BGSPerk* perk, std::string_view group_id)
 		{
-			return IsInGroup(perk, std::string_view(group_id.begin(), group_id.end()));
+			auto it = legacyEditorIDs.find(perk);
+
+
+			if (legacyEditorIDs.end() == it){
+				return false;
+			}
+			
+
+			//std::string_view editor_id = perk->GetFormEditorID();
+			std::string_view editor_id = it->second;
+
+			if (editor_id.empty() == true)
+				return false;
+
+			auto end = editor_id.end();
+
+			logger::debug("{} vs {} {} ?", editor_id, group_id, nullptr != filterPtr);
+
+			return IsInGroup(editor_id, group_id);
+
+			//auto it = std::search(editor_id.begin(), end,
+			//	group_id.begin(), group_id.end(),
+			//	[](const char ch1, const char ch2) { return std::toupper(ch1) == std::toupper(ch2); });
+			//return it != end;
 		}
 
-		//Currently doesn't work, if there's no filter this shouldn't be handling like this
-		static bool IsCategoryValid(RE::BGSEntryPointPerkEntry* entry)
+
+		static bool IsCategoryValid_Legacy(RE::BGSEntryPointPerkEntry* entry)
 		{
 			//If there's no filter on the thread, it's a regular call.
 			auto channel = GetChannel(entry);
@@ -359,27 +320,234 @@ namespace PEPE
 
 			//If it's not within the group, don't run it.
 			return IsInGroup(entry->perk, filterPtr->category);
-				
+
 
 		}
+
+		static std::optional<bool> IsCategoryValid_Revised(RE::BGSEntryPointPerkEntry* entry, bool& do_legacy)
+		{
+			
+			auto& conditions = entry->conditions;
+
+			logger::debug("{}", entry->perk->GetName());
+
+			if (conditions.size() == 0)
+				return !filterPtr;
+			
+			logger::debug("{}", __COUNTER__);
+			
+			RE::TESConditionItem* head = conditions[0].head;
+
+			if (!head)
+				return !filterPtr;
+			logger::debug("{}", __COUNTER__);
+			RE::CONDITION_ITEM_DATA& data = head->data;
+
+			if (data.functionData.function.get() != RE::FUNCTION_DATA::FunctionID::kHasKeyword)
+				return !filterPtr;
+			logger::debug("{}", __COUNTER__);
+
+
+			auto& func_data = data.functionData;
+
+			auto keyword = reinterpret_cast<RE::BGSKeyword*>(func_data.params[0]);
+
+			if (!keyword || keyword->formType != RE::FormType::Keyword)
+				return !filterPtr;
+			
+			auto comp = strncmp(keyword->GetFormEditorID(), groupHeader.data(), groupHeader.size());
+
+			logger::debug("{}", keyword->GetFormEditorID());
+
+			if (comp != 0)
+				return !filterPtr;//This has to differ based on if there's a filter going or not.
+
+			do_legacy = false;
+
+			logger::debug("{}", __COUNTER__);
+
+			//If there's no filter, it passes if no match, fails if there was one.
+			if (!filterPtr) {
+				logger::debug("{}", comp);
+				return comp;
+			}
+
+			logger::debug("{}", __COUNTER__);
+			//This actually doesn't need to do partials anymore, I can do the full thing with keywords
+			if (stricmp(keyword->GetFormEditorID(), filterPtr->category.c_str()) != 0)
+				return false;
+
+			logger::debug("final alter {}", __COUNTER__);
+			//if (IsInGroup(keyword->GetFormEditorID(), filterPtr->category) == false)
+			//	return false;
+
+
+			//I'm going to use this section to make sure that no matter what the conditions are it passes UNLESS it's something that may result in zero.
+
+			using OpCode = RE::CONDITION_ITEM_DATA::OpCode;
+
+			//Instead of editing data else where to make it pass, I'll be forcibly ensuring that it'll pass here.
+			data.flags.global = false;
+			data.flags.isOR = false;
+			data.flags.opCode = OpCode::kGreaterThan;
+			data.comparisonValue.f = 0.0f;
+
+
+			return true;
+		}
+
+
+
+
+		static std::optional<bool> IsCategoryValid_RevisedNEW1(RE::TESConditionItem* head, float new_comp)
+		{
+			if (!head)
+				return std::nullopt;
+
+			logger::debug("{}", __COUNTER__);
+			RE::CONDITION_ITEM_DATA& data = head->data;
+
+			if (data.functionData.function.get() != RE::FUNCTION_DATA::FunctionID::kHasKeyword)
+				return std::nullopt;
+
+			logger::debug("{}", __COUNTER__);
+
+
+			auto& func_data = data.functionData;
+
+			auto keyword = reinterpret_cast<RE::BGSKeyword*>(func_data.params[0]);
+
+			if (!keyword || keyword->formType != RE::FormType::Keyword)
+				return std::nullopt;
+
+			auto comp = strncmp(keyword->GetFormEditorID(), groupHeader.data(), groupHeader.size());
+
+			logger::debug("{}", keyword->GetFormEditorID());
+
+			if (comp != 0)
+				return std::nullopt;//This has to differ based on if there's a filter going or not.
+
+
+			logger::debug("{}", __COUNTER__);
+
+			//If there's no filter, it passes if no match, fails if there was one.
+			if (!filterPtr) {
+				logger::debug("{}", comp);
+				return false;
+			}
+
+			logger::debug("{}", __COUNTER__);
+			//This actually doesn't need to do partials anymore, I can do the full thing with keywords
+			if (stricmp(keyword->GetFormEditorID(), filterPtr->category.c_str()) != 0)
+				return false;
+
+			logger::debug("final alter {}", __COUNTER__);
+			//if (IsInGroup(keyword->GetFormEditorID(), filterPtr->category) == false)
+			//	return false;
+
+
+			//I'm going to use this section to make sure that no matter what the conditions are it passes UNLESS it's something that may result in zero.
+
+			using OpCode = RE::CONDITION_ITEM_DATA::OpCode;
+
+			//Instead of editing data else where to make it pass, I'll be forcibly ensuring that it'll pass here.
+			data.flags.global = false;
+			data.flags.isOR = false;
+			data.flags.opCode = OpCode::kGreaterThan;
+			data.comparisonValue.f = new_comp;
+
+
+			return true;
+		}
+
+
+		static std::optional<bool> IsCategoryValid_RevisedNEW2(RE::BGSEntryPointPerkEntry* entry)
+		{
+
+			auto& conditions = entry->conditions;
+
+			logger::debug("{}", entry->perk->GetName());
+
+			if (conditions.size() == 0)
+				return !filterPtr;
+
+			logger::debug("{}", __COUNTER__);
+
+			RE::TESConditionItem* head = conditions[0].head;
+
+			std::optional<bool> result = IsCategoryValid_RevisedNEW1(head, 0.f);
+
+			
+		
+
+			if (result == std::nullopt) {
+				//This is designed to always be true, even if someone doesn't have the perk.
+				// granted, this would just mean
+
+				head = entry->perk->perkConditions.head;
+				result = IsCategoryValid_RevisedNEW1(head, -1.f);
+				if (head && result == std::nullopt) {
+					result = IsCategoryValid_RevisedNEW1(head->next, -1.f);
+				}
+			}
+
+			return result;
+		}
+
+
+
+		static bool IsCategoryValidNEW(RE::BGSEntryPointPerkEntry* entry)
+		{
+			logger::debug("{}~ {}", entry->perk->GetName(), !!filterPtr);
+			//This is ugly as shit.
+			//bool do_legacy = true;
+
+			std::optional<bool> result = IsCategoryValid_RevisedNEW2(entry);
+
+			if (result.value_or(false) == true)
+				return true;
+
+			return !result.has_value() ? IsCategoryValid_Legacy(entry) : false;
+		}
+
+
+		//Currently doesn't work, if there's no filter this shouldn't be handling like this
+		static bool IsCategoryValid(RE::BGSEntryPointPerkEntry* entry)
+		{
+			logger::debug("{}~ {}", entry->perk->GetName(), !!filterPtr);
+			//This is ugly as shit.
+			bool do_legacy = true;
+
+			if (IsCategoryValid_Revised(entry, do_legacy) == true)
+				return true;
+
+			return do_legacy ? IsCategoryValid_Legacy(entry) : false;
+		}
+
+
+		static bool IsFilterActive()
+		{
+			return !filterPtr;
+		}
+
 
 		//These should likely use references in some of these, to reduce the creating and shit.
 		static RequestResult ApplyPerkEntryPoint(RE::PerkEntryPoint entry_point, RE::Actor* target, std::vector<RE::TESForm*>& args, void* out, RE::BSFixedString& category, uint8_t channel)
 		{
 			if (!target) {
-				logger::debug("no actor given");
+				logger::error("no actor given");
 				return RequestResult::NoActor;
 			}
 
 			if (entry_point >= RE::PerkEntryPoint::kTotal) {
-				logger::debug("bad ep {}", entry_point);
+				logger::error("bad ep {}", entry_point);
 				return RequestResult::BadEntryPoint;
 			}
 
 
 
 			if (IsSupported(entry_point) == false) {
-				logger::debug("unsupported ep {}", entry_point);
+				logger::error("unsupported ep {}", entry_point);
 				return RequestResult::Unsupported;
 			}
 
@@ -387,13 +555,12 @@ namespace PEPE
 			bool use_out = IsOutRequired(entry_point);
 
 			if (use_out && !out) {
-				logger::debug("entry point requires out, no out detected.");
+				logger::error("entry point requires out, no out detected.");
 				return RequestResult::InvalidOut;
 			}
 
 
-			if (entry_point == RE::PerkEntryPoint::kAddLeveledListOnDeath)
-				args.push_back(args.back());//adjusting the size for this wacky ass perk entry
+			
 
 			
 
@@ -417,6 +584,19 @@ namespace PEPE
 				
 				bool res = false;
 				
+				//here's something I didn't think about with these, I never thought to myself if blocking was possibly wanted.
+				// Trying for regular activation might not be what this exactly wanted, so I think I'll actually move that
+				// to the papyrus part of this function. I'll need to devise how to do that later. 
+				//THEN bring the idea of using it to JaySerpa
+
+				//But chief among these changes is that activation CAN actually be lumped in with it's regular versions.
+				// With that being said the longer the name, the eariler it can appear.
+				// Second to this, I'll want to make it so keyword versions of groups can have longer groups.
+				//Lastly, anything that that uses something like this should have an arranged order.
+				//The longer the name of it's category the more it's priority will be increased. Just for being an activate/setlabel should do it.
+				//Alternatively, just call it twice. 
+				//But this bit of arrangement maybe a good idea specifically for folder like categories
+							
 
 				RE::TESObjectREFR* refr = args[0]->As<RE::TESObjectREFR>();
 
@@ -438,12 +618,12 @@ namespace PEPE
 				if (!res) {
 					auto count = refr->extraList.GetCount();
 					
-					refr->ActivateRef(target, 0, nullptr, count, false);
+					res = refr->ActivateRef(target, 0, nullptr, count, false);
 				}
 
-				logger::info("success {}", res);
+				logger::debug("success {}", res);
 				
-				
+				filterPtr = nullptr;
 				return RequestResult::Success;
 			}
 
@@ -480,7 +660,7 @@ namespace PEPE
 			}
 			else
 			{
-				logger::debug("unmatching args {} vs {} ({})", args.size(), param_count, entry_point);
+				logger::debug("unmatching args {} vs {} (Entry point No. {})", args.size(), param_count, entry_point);
 
 			}
 
@@ -490,17 +670,115 @@ namespace PEPE
 
 		}
 
-		static RequestResult ApplyPerkEntryPoint(RE::Actor* target, RE::BSFixedString& point_name, std::vector<RE::TESForm*>& args, void* out, RE::BSFixedString& category, uint8_t channel)
+		static bool ApplyPerkEntryPointPapyrus(SkyrimVM* vm, RE::VMStackID stack_id, RE::Actor* target, RE::BSFixedString& point_name, std::vector<RE::TESForm*>& args, void* out, RE::BSFixedString& category, uint8_t channel, int32_t h_id)
 		{
+			//I'm considering having a safety check some where around here that will make sure that the out isn't bad or something.
+
 			RE::PerkEntryPoint entry_point = GetPerkEntryPoint(point_name);
+			
+			constexpr auto kError = SkyrimVM::Severity::kError;
+
+
+			Handle* handle = h_id ? HandleManager::GetHandle(h_id) : nullptr;
+
+			if (!handle && h_id) {
+				vm->VTraceStack(stack_id, kError, "EP condition handle %i isn't valid", h_id);
+			}
+			
+			bool fire = true;
+
 
 			if (entry_point == RE::PerkEntryPoint::kTotal) {
-				logger::debug("bad string {}", point_name.c_str());
-				return RequestResult::BadString;
+				vm->VTraceStack(stack_id, kError, "Invalid entry point name %s", point_name.c_str());
+				fire = false;
 			}
 
-			//removing making the channel zero based.
-			return ApplyPerkEntryPoint(entry_point, target, args, out, category, channel - 1);
+			if (fire)
+			{
+				if (entry_point == RE::PerkEntryPoint::kAddLeveledListOnDeath) {
+					//This one is an interesting one, because the actual argument takes 3 forms, so the out form is the TESObjectREFR that the items go to.
+					// In keeping with it's look, and to not have to make another form, I'm going to have users use 3 arguments, with the third
+					//args.push_back(args.back());
+					if (args.size() < 2) {
+						vm->TraceStack("AddLeveledListOnDeath requires 2 arguments. (First for conditions, second for distribution)", stack_id);
+						fire = false;
+					}
+
+					RE::TESForm* form = args.back();
+					args.pop_back();
+
+					if (!form) {
+						vm->TraceStack("Last argument of AddLeveledListOnDeath is null", stack_id);
+						fire = false;
+					}
+
+					switch (*form->formType)
+					{
+					case RE::FormType::Reference:
+					case RE::FormType::ActorCharacter:
+						break;
+
+					default:
+						vm->TraceStack("Last argument of AddLeveledListOnDeath is not an ObjectReference or Actor", stack_id);
+						fire = false;
+						break;
+					}
+					out = args.back();
+					args.pop_back();
+
+				}
+			}
+
+
+			if (fire) 
+			{
+				RequestResult result = ApplyPerkEntryPoint(entry_point, target, args, out, category, channel - 1);
+				fire = false;
+				switch (result)
+				{
+					case RequestResult::Success:
+						fire = true;
+						break;
+
+					case RequestResult::Unsupported:	//entry point is not/no longer supported.
+						vm->VTraceStack(stack_id, kError, "Entry Point %s isn't supported", magic_enum::enum_name(entry_point).data());
+						break;
+
+					case RequestResult::UnmatchedArgs:	//entry arg number doesn't match no. args given
+						vm->VTraceStack(stack_id, kError, "Expected argument count doesn't match given argument count %i", (int32_t)args.size());
+						break;
+
+					case RequestResult::BadFormArg:		//Invalid forms given as args
+						vm->TraceStack("Invalid forms given for entry point", stack_id);
+						break;
+
+					case RequestResult::NoActor:		//No perk owner
+						vm->TraceStack("Target for entry point is null", stack_id);
+						break;
+
+					case RequestResult::InvalidActor:	//Perk entry invalid on target
+						vm->VTraceStack(stack_id, kError, "Invalid entry point to use on target %s(%.8X)", target->GetDisplayFullName(), target->formID);
+						break;
+
+					case RequestResult::InvalidOut:
+						vm->TraceStack("Entry Point returns but no return type designated", stack_id);
+						break;
+
+					default:
+						vm->VTraceStack(stack_id, kError, "Unexpected error experienced (%s)", magic_enum::enum_name(result).data());
+						break;
+				}
+
+			}
+			
+			
+			
+			if (handle) {
+				handle->RunHandle(false);
+				HandleManager::CloseHandle(h_id);
+			}
+
+			return fire;
 		}
 
 
@@ -509,7 +787,8 @@ namespace PEPE
 			
 			//It should ignore this perk if it has no ranks.
 
-			bool is_group = IsInGroup(perk, groupHeader);
+			//bool is_group = IsInGroup(perk, groupHeader);
+			bool is_group = true;
 			auto result = 0;
 
 			int max_ranks = perk->data.numRanks;
@@ -563,7 +842,7 @@ namespace PEPE
 
 			if (result) {//The ranks were a dream, they never existed
 				perk->data.numRanks = max_ranks;
-				logger::info("rank of {}, {}", perk->GetName(), perk->data.numRanks);
+				logger::debug("rank of {}, {}", perk->GetName(), perk->data.numRanks);
 
 			}
 
@@ -585,17 +864,29 @@ namespace PEPE
 			size_t form_count = 0;
 			size_t entry_count = 0;
 
+			//*
 			for (RE::TESForm* form : form_array) {
-				auto* true_form = form->As<RE::BGSPerk>();
+				auto* perk = form->As<RE::BGSPerk>();
 
-				if (true_form) {
-					auto count = ProcessPerk(true_form);
+				if (perk) {
+					//Dumb shit but it will probably be what I need to shake loose this terrible awfulness
+					for (auto& entry : perk->perkEntries)
+					{
+						if (entry->GetType() == RE::PERK_ENTRY_TYPE::kEntryPoint) {
+							EntryPointHandler::GetChannel(entry) = 0;
+						}
 
-					form_count += count != 0;
-					entry_count += count;
+					}
 				}
 			}
-			
+			//*/
+			for (auto& [perk, str] : legacyEditorIDs)
+			{
+				auto count = ProcessPerk(perk);
+				form_count += count != 0;
+				entry_count += count;
+			}
+
 			logger::info("Perk Entries Categorized. Processed {} perk{} and {} entr{}.",
 				form_count, _s[form_count != 1],
 				entry_count, _y[entry_count != 1]);

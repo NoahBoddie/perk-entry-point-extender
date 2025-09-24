@@ -26,7 +26,13 @@
         "plugin": {
             "description": "Build the SKSE plugin.",
           "dependencies": [
-            "commonlibsse-ng"
+            "commonlibsse-ng",
+            "directxmath",
+            "directxtk",
+            "openvr",
+            "xbyak",
+            "magic-enum",
+            "nlohmann-json"
           ]
         }
     },

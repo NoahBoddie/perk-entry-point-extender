@@ -107,7 +107,7 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
 
-#include "magic_enum.hpp"
+#include "magic_enum/magic_enum.hpp"
 
 
 // Compatible declarations with other sample projects.

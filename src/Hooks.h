@@ -200,7 +200,35 @@ namespace PEPE
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+	
+	struct ForEachPerkEntryHook
+	{
 
+		static void Install()
+		{
+			auto Character_VTable = REL::Relocation{ RE::Character::VTABLE[0] };
+			auto PlayerCharacter_VTable = REL::Relocation{ RE::PlayerCharacter::VTABLE[0] };
+			func[0] = Character_VTable.write_vfunc(0x100, thunk<0>);
+			func[1] = PlayerCharacter_VTable.write_vfunc(0x100, thunk<1>);
+
+		}
+
+
+		static void thunkImpl(RE::Actor* a_this, RE::PerkEntryPoint type, RE::PerkEntryVisitor& visitor, int I)
+		{
+			if (EntryPointHandler::ForEachPerkEntry(a_this, type, visitor) == true)
+				return func[I](a_this, type, visitor);
+		}
+
+		template<int I = 0>
+		static void thunk(RE::Actor* a_this, RE::PerkEntryPoint type, RE::PerkEntryVisitor& visitor)
+		{
+			return thunkImpl(a_this, type, visitor, I);
+		}
+
+
+		inline static REL::Relocation<decltype(thunk<>)> func[2];
+	};
 
 
 	struct Hooks
@@ -217,6 +245,7 @@ namespace PEPE
 
 
 			//No need for allocation, YAAAAAY!
+			ForEachPerkEntryHook::Install();
 			Condition_HasKeywordHook::Patch();
 			EntryPointPerkEntry__EvaluateConditionHook::Patch();
 			ApplyAttackSpellsHook::Patch();

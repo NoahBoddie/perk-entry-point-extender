@@ -28,39 +28,71 @@ namespace PEPE
 		UnknownError//The last entry, if this is seen the API has an issue that's out of date to handle.
 
 	};
+
+	struct Scope_EntryPointFlag
+	{
+		enum Enum : uint64_t
+		{
+			None = 0,
+			ReverseOrder = 1 << 0,
+			UsesCollection = 1 << 1,
+		};
+	};
+
+	using EntryPointFlag = Scope_EntryPointFlag::Enum;
+
+	struct IFormCollection
+	{
+		//returns true or false if it's the right form loaded or not.
+		virtual bool LoadForm(RE::TESForm* form) = 0;
+	};
+
+
+	template <typename T>
+	struct BasicFormCollection 
+	{
+		//If a non-collection is given
+		BasicFormCollection(T& it) {}
+	};
+
+	template <typename T> requires (std::is_pointer_v<typename T::value_type> &&
+		std::derived_from<std::remove_pointer_t<typename T::value_type>, RE::TESForm> &&
+		requires(T t1, T::value_type t2) { t1.push_back(t2); })
+	struct BasicFormCollection<T> : public IFormCollection
+	{
+		BasicFormCollection(T& it) : out{ it } {}
+
+
+		bool LoadForm(RE::TESForm* form) override
+		{
+			if (auto it = form->As<T>()) {
+				out.push_back(form);
+				return true;
+			}
+
+			return false;
+		}
+
+		T& out;
+
+	};
+
+
+	void Test()
+	{
+		int t = 1;
+		BasicFormCollection<decltype(t)> test{t};
+		std::vector<RE::TESForm*> something;
+		BasicFormCollection<decltype(something)> test2{ something };
+		test2.LoadForm(nullptr);
+
+		using T = decltype(something);
+		constexpr bool metCond = std::is_pointer_v<T::value_type> &&
+			std::derived_from<std::remove_pointer_t<T::value_type>, RE::TESForm> &&
+			requires(T t1, T::value_type t2) { t1.push_back(t2); };
+
+	}
 }
-
-
-//I'm literally gambling that this is backwards compatible but the sizes and data types are the same
-/*
-template <class T>
-struct ABIContainer
-{
-	using pointer = T*;
-
-	T* _data = nullptr;
-	std::uint64_t _size{};
-
-
-	T& operator[] (std::uint64_t index) const
-	{
-		assert(index < _size);
-
-		return _data[index];
-	}
-
-	uint64_t size() const
-	{
-		return _size;
-	}
-	ABIContainer() = default;
-	ABIContainer(T* d, uint64_t s) : _data{ d }, _size{ s } {}
-	ABIContainer(std::vector<T>& v) : _data{ v.data() }, _size{ v.size() } {}
-
-	operator std::vector<T>() { return _data && _size ? std::vector<T>(_data, _data + _size) : std::vector<T>{}; }
-};
-//*/
-
 
 namespace PerkEntryPointExtenderAPI
 {
@@ -72,9 +104,11 @@ namespace PerkEntryPointExtenderAPI
 	enum Version
 	{
 		Version1,
+		Version2,
 
 
-		Current = Version1
+		
+		Current = Version2
 	};
 
 	struct InterfaceVersion1
@@ -89,13 +123,23 @@ namespace PerkEntryPointExtenderAPI
 		/// <returns></returns>
 		virtual Version GetVersion() = 0;
 
-
-		virtual RequestResult ApplyPerkEntryPoint(RE::Actor* target, RE::PerkEntryPoint a_entryPoint, ABIContainer<RE::TESForm*> args, void* out,
+		[[deprecated("This version of ApplyPerkEntryPoint doesn't include entry point flags and uses the deprecated channel feature.")]]
+		virtual RequestResult ApplyPerkEntryPoint_Deprecated(RE::Actor* target, RE::PerkEntryPoint a_entryPoint, ABIContainer<RE::TESForm*> args, void* out,
 			const char* category, uint8_t channel) = 0;
 
 	};
 
-	using CurrentInterface = InterfaceVersion1;
+	struct InterfaceVersion2 : public InterfaceVersion1
+	{
+		inline static constexpr auto VERSION = Version::Version2;
+
+		virtual RequestResult ApplyPerkEntryPoint(RE::Actor* target, RE::PerkEntryPoint a_entryPoint, ABIContainer<RE::TESForm*> args, void* out,
+			const char* category, uint8_t channel, EntryPointFlag flags) = 0;
+
+	};
+
+
+	using CurrentInterface = InterfaceVersion2;
 
 	inline CurrentInterface* Interface = nullptr;
 
@@ -168,8 +212,8 @@ namespace RE
 
 	//Within the api function, I require the ability to know if the out parameter is a vector or not.
 	
-	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner,
-		void* out, const std::string_view& category, uint8_t channel, std::vector<RE::TESForm*> arg_list)
+	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, 
+		PEPE::EntryPointFlag flags, void* out, const std::string_view& category, uint8_t channel, std::vector<RE::TESForm*> arg_list)
 	{
 		auto* intfc = PerkEntryPointExtenderAPI::RequestInterface();
 
@@ -177,7 +221,7 @@ namespace RE
 		if (!intfc)
 			return PEPE::RequestResult::InvalidAPI;
 
-		return intfc->ApplyPerkEntryPoint(a_perkOwner, a_entryPoint, arg_list, out, category.data(), channel);
+		return intfc->ApplyPerkEntryPoint(a_perkOwner, a_entryPoint, arg_list, out, category.data(), channel, flags);
 	}
 
 
@@ -188,12 +232,14 @@ namespace RE
 	//stuff with string_view
 
 	
+
 	template <class O, std::derived_from<RE::TESForm>... Args>
 	[[deprecated("Use of channels are a legacy feature and are deprecated. Use of keywords are prefered over ranks.")]]
 	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out,
 		const std::string_view& category, uint8_t channel, Args*... a_args)
 	{
 		constexpr bool no_out = std::is_same_v<std::nullopt_t, O>;
+
 
 		if constexpr (no_out) {
 			//If no out is desired it will send it with a nullptr so the proper error can show
@@ -217,26 +263,50 @@ namespace RE
 	/// <param name="...a_args">The condition targets for the entry point conditions tab of the perk.</param>
 	/// <returns>Returns the result of the function, and whether the call failed due to a parameter or API issue.</returns>
 	template <class O, std::derived_from<RE::TESForm>... Args>
-	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, const std::string_view& category, Args*... a_args)
+	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, PEPE::EntryPointFlag flags, O& out,
+		const std::string_view& category, Args*... a_args)
 	{
 
 		constexpr bool no_out = std::is_same_v<std::nullopt_t, O>;
 
+
+		PEPE::BasicFormCollection<O> collector{ out };
+
+		if constexpr (!std::is_empty_v<decltype(collector)>) {
+			//Submit flags
+			flags = flags | PEPE::EntryPointFlag::UsesCollection;
+		}
+
+
 		if constexpr (no_out) {
 			//If no out is desired it will send it with a nullptr so the proper error can show
-			return HandleEntryPoint(a_entryPoint, a_perkOwner, nullptr, category, 0, { a_args... });
+			return HandleEntryPoint(a_entryPoint, a_perkOwner, nullptr, category, 255, { a_args... });
 		}
 		else {
 			void* o = const_cast<std::remove_const_t<O>*>(std::addressof(out));
-			return HandleEntryPoint(a_entryPoint, a_perkOwner, o, category, 0, { a_args... });
+			return HandleEntryPoint(a_entryPoint, a_perkOwner, o, category, 255, { a_args... });
 		}
 	}
 
+
+	template <class O, std::derived_from<RE::TESForm>... Args>
+	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, const std::string_view& category, Args*... a_args)
+	{
+		return HandleEntryPoint(a_entryPoint, a_perkOwner, PEPE::EntryPointFlag::None, out, category, 0, a_args...);
+	}
+
+
 	//no cat nor cha
+	template <class O, std::derived_from<RE::TESForm>... Args>
+	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, PEPE::EntryPointFlag flags, O& out, Args*... a_args)
+	{
+		return HandleEntryPoint(a_entryPoint, a_perkOwner, flags, out, "", 0, a_args...);
+	}
+
 	template <class O, std::derived_from<RE::TESForm>... Args>
 	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, Args*... a_args)
 	{
-		return HandleEntryPoint(a_entryPoint, a_perkOwner, out, "", a_args...);
+		return HandleEntryPoint(a_entryPoint, a_perkOwner, out, "", 0, a_args...);
 	}
 
 	//cat only

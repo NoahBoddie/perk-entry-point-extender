@@ -20,6 +20,7 @@ namespace PEPE
 		{
 			std::string category;
 			uint8_t channel;
+			EntryPointFlag flags;
 		};
 
 
@@ -324,78 +325,6 @@ namespace PEPE
 
 		}
 
-		static std::optional<bool> IsCategoryValid_Revised(RE::BGSEntryPointPerkEntry* entry, bool& do_legacy)
-		{
-			
-			auto& conditions = entry->conditions;
-
-			logger::debug("{}", entry->perk->GetName());
-
-			if (conditions.size() == 0)
-				return !filterPtr;
-			
-			logger::debug("{}", __COUNTER__);
-			
-			RE::TESConditionItem* head = conditions[0].head;
-
-			if (!head)
-				return !filterPtr;
-			logger::debug("{}", __COUNTER__);
-			RE::CONDITION_ITEM_DATA& data = head->data;
-
-			if (data.functionData.function.get() != RE::FUNCTION_DATA::FunctionID::kHasKeyword)
-				return !filterPtr;
-			logger::debug("{}", __COUNTER__);
-
-
-			auto& func_data = data.functionData;
-
-			auto keyword = reinterpret_cast<RE::BGSKeyword*>(func_data.params[0]);
-
-			if (!keyword || keyword->formType != RE::FormType::Keyword)
-				return !filterPtr;
-			
-			auto comp = strncmp(keyword->GetFormEditorID(), groupHeader.data(), groupHeader.size());
-
-			logger::debug("{}", keyword->GetFormEditorID());
-
-			if (comp != 0)
-				return !filterPtr;//This has to differ based on if there's a filter going or not.
-
-			do_legacy = false;
-
-			logger::debug("{}", __COUNTER__);
-
-			//If there's no filter, it passes if no match, fails if there was one.
-			if (!filterPtr) {
-				logger::debug("{}", comp);
-				return comp;
-			}
-
-			logger::debug("{}", __COUNTER__);
-			//This actually doesn't need to do partials anymore, I can do the full thing with keywords
-			if (stricmp(keyword->GetFormEditorID(), filterPtr->category.c_str()) != 0)
-				return false;
-
-			logger::debug("final alter {}", __COUNTER__);
-			//if (IsInGroup(keyword->GetFormEditorID(), filterPtr->category) == false)
-			//	return false;
-
-
-			//I'm going to use this section to make sure that no matter what the conditions are it passes UNLESS it's something that may result in zero.
-
-			using OpCode = RE::CONDITION_ITEM_DATA::OpCode;
-
-			//Instead of editing data else where to make it pass, I'll be forcibly ensuring that it'll pass here.
-			data.flags.global = false;
-			data.flags.isOR = false;
-			data.flags.opCode = OpCode::kGreaterThan;
-			data.comparisonValue.f = 0.0f;
-
-
-			return true;
-		}
-
 
 
 
@@ -438,7 +367,10 @@ namespace PEPE
 
 			logger::debug("{}", __COUNTER__);
 			//This actually doesn't need to do partials anymore, I can do the full thing with keywords
-			if (stricmp(keyword->GetFormEditorID(), filterPtr->category.c_str()) != 0)
+			//if (stricmp(keyword->GetFormEditorID(), filterPtr->category.c_str()) != 0)
+			//	return false;
+
+			if (_strnicmp(keyword->GetFormEditorID(), filterPtr->category.c_str(), filterPtr->category.size()) != 0)
 				return false;
 
 			logger::debug("final alter {}", __COUNTER__);
@@ -511,28 +443,47 @@ namespace PEPE
 		}
 
 
-		//Currently doesn't work, if there's no filter this shouldn't be handling like this
-		static bool IsCategoryValid(RE::BGSEntryPointPerkEntry* entry)
-		{
-			logger::debug("{}~ {}", entry->perk->GetName(), !!filterPtr);
-			//This is ugly as shit.
-			bool do_legacy = true;
-
-			if (IsCategoryValid_Revised(entry, do_legacy) == true)
-				return true;
-
-			return do_legacy ? IsCategoryValid_Legacy(entry) : false;
-		}
-
-
 		static bool IsFilterActive()
 		{
 			return !filterPtr;
 		}
 
 
+		static bool ForEachPerkEntry(RE::Actor* target, RE::PerkEntryPoint type, RE::PerkEntryVisitor& visitor)
+		{
+			if (filterPtr && (filterPtr->flags & EntryPointFlag::ReverseOrder) == 0) {
+				return true;
+			}
+
+
+			if (type < RE::PerkEntryPoint::kTotal) {
+				if (auto middle_high = target->GetMiddleHighProcess())
+				{
+					if (RE::AIPerkData* perk_data = middle_high->perkData)
+					{
+						auto& array = perk_data->at(type);
+
+						if (array.size() != 0)
+						{
+							for (auto it = array.end() - 1, end = array.begin() - 1; it != end; it--)
+							{
+								if (auto entry = *it; visitor.Visit(entry) != RE::BSContainer::ForEachResult::kContinue)
+									break;
+							}
+						}
+					}
+
+				}
+			}
+
+
+			return false;
+		}
+
+
 		//These should likely use references in some of these, to reduce the creating and shit.
-		static RequestResult ApplyPerkEntryPoint(RE::PerkEntryPoint entry_point, RE::Actor* target, std::vector<RE::TESForm*>& args, void* out, RE::BSFixedString& category, uint8_t channel)
+		static RequestResult ApplyPerkEntryPoint(RE::PerkEntryPoint entry_point, RE::Actor* target, std::vector<RE::TESForm*>& args, void* out, 
+			const RE::BSFixedString& category, uint8_t channel, EntryPointFlag flags)
 		{
 			if (!target) {
 				logger::error("no actor given");
@@ -540,14 +491,14 @@ namespace PEPE
 			}
 
 			if (entry_point >= RE::PerkEntryPoint::kTotal) {
-				logger::error("bad ep {}", entry_point);
+				logger::error("bad ep {}", magic_enum::enum_name(entry_point));
 				return RequestResult::BadEntryPoint;
 			}
 
 
 
 			if (IsSupported(entry_point) == false) {
-				logger::error("unsupported ep {}", entry_point);
+				logger::error("unsupported ep {}", magic_enum::enum_name(entry_point));
 				return RequestResult::Unsupported;
 			}
 
@@ -566,7 +517,7 @@ namespace PEPE
 
 
 			//TODO:Add a header to the category for filters, I don't want to see PEPEGROUP__ at the start of all of these.
-			EntryPointFilter filter{ std::string{groupHeader}, channel };
+			EntryPointFilter filter{ std::string{groupHeader}, channel, flags };
 
 			
 
@@ -660,7 +611,7 @@ namespace PEPE
 			}
 			else
 			{
-				logger::debug("unmatching args {} vs {} (Entry point No. {})", args.size(), param_count, entry_point);
+				logger::debug("unmatching args {} vs {} (Entry point No. {})", args.size(), param_count, magic_enum::enum_name(entry_point));
 
 			}
 
@@ -670,7 +621,8 @@ namespace PEPE
 
 		}
 
-		static bool ApplyPerkEntryPointPapyrus(SkyrimVM* vm, RE::VMStackID stack_id, RE::Actor* target, RE::BSFixedString& point_name, std::vector<RE::TESForm*>& args, void* out, RE::BSFixedString& category, uint8_t channel, int32_t h_id)
+		static bool ApplyPerkEntryPointPapyrus(SkyrimVM* vm, RE::VMStackID stack_id, RE::Actor* target, RE::BSFixedString& point_name, std::vector<RE::TESForm*>& args, void* out, 
+			RE::BSFixedString& category, uint8_t channel, int32_t h_id, std::span<std::string> flag_strings)
 		{
 			//I'm considering having a safety check some where around here that will make sure that the out isn't bad or something.
 
@@ -678,8 +630,17 @@ namespace PEPE
 			
 			constexpr auto kError = SkyrimVM::Severity::kError;
 
+			//Needs to turn the flag strings into these flags.
+			EntryPointFlag flags = EntryPointFlag::None;
+
+			for (auto& flag_name : flag_strings)
+			{
+				if (auto flag = magic_enum::enum_cast<EntryPointFlag>(flag_name))
+					flags = (EntryPointFlag)(flags | flag.value());
+			}
 
 			Handle* handle = h_id ? HandleManager::GetHandle(h_id) : nullptr;
+
 
 			if (!handle && h_id) {
 				vm->VTraceStack(stack_id, kError, "EP condition handle %i isn't valid", h_id);
@@ -732,7 +693,7 @@ namespace PEPE
 
 			if (fire) 
 			{
-				RequestResult result = ApplyPerkEntryPoint(entry_point, target, args, out, category, channel - 1);
+				RequestResult result = ApplyPerkEntryPoint(entry_point, target, args, out, category, channel - 1, flags);
 				fire = false;
 				switch (result)
 				{

@@ -19,7 +19,12 @@ namespace PEPE
 			a_vm->RegisterFunction("ApplyPerkEntryPointSpell", "PerkEntryPointExtender", ApplyPerkEntryPointSpell);
 			a_vm->RegisterFunction("ApplyPerkEntryPointFloat", "PerkEntryPointExtender", ApplyPerkEntryPointFloat);
 			a_vm->RegisterFunction("ApplyPerkEntryPointString", "PerkEntryPointExtender", ApplyPerkEntryPointString);
-			
+
+			a_vm->RegisterFunction("ApplyPerkEntryPointWithFlags", "PerkEntryPointExtender", ApplyPerkEntryPointWithFlags);
+			a_vm->RegisterFunction("ApplyPerkEntryPointFormWithFlags", "PerkEntryPointExtender", ApplyPerkEntryPointFormWithFlags);
+			a_vm->RegisterFunction("ApplyPerkEntryPointSpellWithFlags", "PerkEntryPointExtender", ApplyPerkEntryPointSpellWithFlags);
+			a_vm->RegisterFunction("ApplyPerkEntryPointFloatWithFlags", "PerkEntryPointExtender", ApplyPerkEntryPointFloatWithFlags);
+			a_vm->RegisterFunction("ApplyPerkEntryPointStringWithFlags", "PerkEntryPointExtender", ApplyPerkEntryPointStringWithFlags);
 			
 			
 			a_vm->RegisterFunction("CloseHandle", "PerkEntryPointExtender", CloseHandle);
@@ -44,7 +49,7 @@ namespace PEPE
 		static inline void ApplyPerkEntryPoint(SkyrimVM* vm, RE::VMStackID stack_id, RE::StaticFunctionTag*,
 			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, RE::BSFixedString category, int32_t channel, int32_t handle)
 		{
-			EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, nullptr, category, channel, handle);
+			EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, nullptr, category, channel, handle, {});
 		}
 		
 		
@@ -54,7 +59,7 @@ namespace PEPE
 			//By default has a capacity of 1 so if kernel's fix is not installed, I can just give data.
 			std::vector<RE::TESForm*> out{1};
 			
-			auto result = EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, kernels_fix ? &out : (void*)out.data(), category, channel, handle);
+			auto result = EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, kernels_fix ? &out : (void*)out.data(), category, channel, handle, {});
 
 			return result ? out : std::vector<RE::TESForm*>{};
 		}
@@ -66,7 +71,7 @@ namespace PEPE
 			//By default has a capacity of 1 so if kernel's fix is not installed, I can just give data.
 			std::vector<RE::SpellItem*> out{ 1 };
 			
-			auto result = EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, kernels_fix ? &out : (void*)out.data(), category, channel, handle);
+			auto result = EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, kernels_fix ? &out : (void*)out.data(), category, channel, handle, {});
 
 			return result ? out : std::vector<RE::SpellItem*>{};
 		}
@@ -82,7 +87,7 @@ namespace PEPE
 
 
 
-			EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, &base_value, category, channel, handle);
+			EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, &base_value, category, channel, handle, {});
 
 			return base_value;//temporary, want to make an error value.
 		}
@@ -91,12 +96,80 @@ namespace PEPE
 		static inline RE::BSFixedString ApplyPerkEntryPointString(SkyrimVM* vm, RE::VMStackID stack_id, RE::StaticFunctionTag*,
 			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, RE::BSFixedString or_value, RE::BSFixedString category, int32_t channel, int32_t handle)
 		{
-			const char* out = nullptr;
+			RE::BSString out;
 
-			auto result = EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, &out, category, channel, handle);
+			auto result = EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, &out, category, channel, handle, {});
 
-			return result ? out : or_value;
+			return result ? out.c_str() : or_value;
 		}
+
+
+
+		//////////////////////////////////////
+
+		static inline void ApplyPerkEntryPointWithFlags(SkyrimVM* vm, RE::VMStackID stack_id, RE::StaticFunctionTag*,
+			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, std::vector<std::string> flag_strings,
+			RE::BSFixedString category, int32_t channel, int32_t handle)
+		{
+			EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, nullptr, category, channel, handle, {});
+		}
+
+
+		static inline std::vector<RE::TESForm*> ApplyPerkEntryPointFormWithFlags(SkyrimVM* vm, RE::VMStackID stack_id, RE::StaticFunctionTag*,
+			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, std::vector<std::string> flag_strings,
+			RE::BSFixedString category, int32_t channel, int32_t handle)
+		{
+			//By default has a capacity of 1 so if kernel's fix is not installed, I can just give data.
+			std::vector<RE::TESForm*> out{ 1 };
+
+			auto result = EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, kernels_fix ? &out : (void*)out.data(), category, channel, handle, {});
+
+			return result ? out : std::vector<RE::TESForm*>{};
+		}
+
+		//Same as the above.
+		static inline std::vector<RE::SpellItem*> ApplyPerkEntryPointSpellWithFlags(SkyrimVM* vm, RE::VMStackID stack_id, RE::StaticFunctionTag*,
+			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, std::vector<std::string> flag_strings,
+			RE::BSFixedString category, int32_t channel, int32_t handle)
+		{
+			//By default has a capacity of 1 so if kernel's fix is not installed, I can just give data.
+			std::vector<RE::SpellItem*> out{ 1 };
+
+			auto result = EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, kernels_fix ? &out : (void*)out.data(), category, channel, handle, {});
+
+			return result ? out : std::vector<RE::SpellItem*>{};
+		}
+
+
+		static inline float ApplyPerkEntryPointFloatWithFlags(SkyrimVM* vm, RE::VMStackID stack_id, RE::StaticFunctionTag*,
+			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, float base_value, std::vector<std::string> flag_strings,
+			RE::BSFixedString category, int32_t channel, int32_t handle)
+		{
+
+			//size_t size = target->currentProcess->middleHigh->perkData->at(RE::PerkEntryPoint::kModAttackDamage).size();
+
+			//logger::info("size of attack array {}", size);
+
+
+
+			EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, &base_value, category, channel, handle, {});
+
+			return base_value;//temporary, want to make an error value.
+		}
+
+
+		static inline RE::BSFixedString ApplyPerkEntryPointStringWithFlags(SkyrimVM* vm, RE::VMStackID stack_id, RE::StaticFunctionTag*,
+			RE::Actor* target, RE::BSFixedString entry_point, std::vector<RE::TESForm*> args, std::vector<std::string> flag_strings, RE::BSFixedString or_value,
+			RE::BSFixedString category, int32_t channel, int32_t handle)
+		{
+			RE::BSString out;
+
+			auto result = EntryPointHandler::ApplyPerkEntryPointPapyrus(vm, stack_id, target, entry_point, args, &out, category, channel, handle, {});
+
+			return result ? out.c_str() : or_value;
+		}
+
+
 
 
 

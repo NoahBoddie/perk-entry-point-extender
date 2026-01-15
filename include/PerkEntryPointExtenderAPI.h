@@ -76,22 +76,6 @@ namespace PEPE
 		T& out;
 
 	};
-
-
-	void Test()
-	{
-		int t = 1;
-		BasicFormCollection<decltype(t)> test{t};
-		std::vector<RE::TESForm*> something;
-		BasicFormCollection<decltype(something)> test2{ something };
-		test2.LoadForm(nullptr);
-
-		using T = decltype(something);
-		constexpr bool metCond = std::is_pointer_v<T::value_type> &&
-			std::derived_from<std::remove_pointer_t<T::value_type>, RE::TESForm> &&
-			requires(T t1, T::value_type t2) { t1.push_back(t2); };
-
-	}
 }
 
 namespace PerkEntryPointExtenderAPI
@@ -233,24 +217,6 @@ namespace RE
 
 	
 
-	template <class O, std::derived_from<RE::TESForm>... Args>
-	[[deprecated("Use of channels are a legacy feature and are deprecated. Use of keywords are prefered over ranks.")]]
-	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out,
-		const std::string_view& category, uint8_t channel, Args*... a_args)
-	{
-		constexpr bool no_out = std::is_same_v<std::nullopt_t, O>;
-
-
-		if constexpr (no_out) {
-			//If no out is desired it will send it with a nullptr so the proper error can show
-			return HandleEntryPoint(a_entryPoint, a_perkOwner, nullptr, category, channel, { a_args... });
-		}
-		else {
-			void* o = const_cast<std::remove_const_t<O>*>(std::addressof(out));
-			return HandleEntryPoint(a_entryPoint, a_perkOwner, o, category, channel, { a_args... });
-		}
-	}
-
 	/// <summary>
 	/// 
 	/// </summary>
@@ -264,7 +230,7 @@ namespace RE
 	/// <returns>Returns the result of the function, and whether the call failed due to a parameter or API issue.</returns>
 	template <class O, std::derived_from<RE::TESForm>... Args>
 	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, PEPE::EntryPointFlag flags, O& out,
-		const std::string_view& category, Args*... a_args)
+		const std::string_view& category, uint8_t channel, Args*... a_args)
 	{
 
 		constexpr bool no_out = std::is_same_v<std::nullopt_t, O>;
@@ -280,19 +246,24 @@ namespace RE
 
 		if constexpr (no_out) {
 			//If no out is desired it will send it with a nullptr so the proper error can show
-			return HandleEntryPoint(a_entryPoint, a_perkOwner, nullptr, category, 255, { a_args... });
+			return HandleEntryPoint(a_entryPoint, a_perkOwner, flags, nullptr, category, channel, { a_args... });
 		}
 		else {
 			void* o = const_cast<std::remove_const_t<O>*>(std::addressof(out));
-			return HandleEntryPoint(a_entryPoint, a_perkOwner, o, category, 255, { a_args... });
+			return HandleEntryPoint(a_entryPoint, a_perkOwner, flags, o, category, channel, { a_args... });
 		}
 	}
 
+	template <class O, std::derived_from<RE::TESForm>... Args>
+	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, PEPE::EntryPointFlag flags, O& out, const std::string_view& category, Args*... a_args)
+	{
+		return HandleEntryPoint(a_entryPoint, a_perkOwner, flags, out, category, 255, a_args...);
+	}
 
 	template <class O, std::derived_from<RE::TESForm>... Args>
 	inline static PEPE::RequestResult HandleEntryPoint(RE::PerkEntryPoint a_entryPoint, RE::Actor* a_perkOwner, O& out, const std::string_view& category, Args*... a_args)
 	{
-		return HandleEntryPoint(a_entryPoint, a_perkOwner, PEPE::EntryPointFlag::None, out, category, 0, a_args...);
+		return HandleEntryPoint(a_entryPoint, a_perkOwner, PEPE::EntryPointFlag::None, out, category, 255, a_args...);
 	}
 
 

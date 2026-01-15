@@ -451,7 +451,7 @@ namespace PEPE
 
 		static bool ForEachPerkEntry(RE::Actor* target, RE::PerkEntryPoint type, RE::PerkEntryVisitor& visitor)
 		{
-			if (filterPtr && (filterPtr->flags & EntryPointFlag::ReverseOrder) == 0) {
+			if (!filterPtr || (filterPtr->flags & EntryPointFlag::ReverseOrder) == 0) {
 				return true;
 			}
 

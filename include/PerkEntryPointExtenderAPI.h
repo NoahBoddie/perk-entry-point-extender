@@ -235,22 +235,32 @@ namespace RE
 
 		constexpr bool no_out = std::is_same_v<std::nullopt_t, O>;
 
-
-		PEPE::BasicFormCollection<O> collector{ out };
-
-		if constexpr (!std::is_empty_v<decltype(collector)>) {
-			//Submit flags
-			flags = flags | PEPE::EntryPointFlag::UsesCollection;
-		}
-
-
 		if constexpr (no_out) {
 			//If no out is desired it will send it with a nullptr so the proper error can show
 			return HandleEntryPoint(a_entryPoint, a_perkOwner, flags, nullptr, category, channel, { a_args... });
 		}
 		else {
-			void* o = const_cast<std::remove_const_t<O>*>(std::addressof(out));
+			constexpr bool valid_collect = !std::is_empty_v<decltype(collector)>>;
+
+			PEPE::BasicFormCollection<O> collector{ out };
+			void* o;
+
+			if constexpr (valid_collect) {
+				//Submit flags
+				flags = flags | PEPE::EntryPointFlag::UsesCollection;
+				o = &collector;
+
+			}
+			else {
+				o = const_cast<std::remove_const_t<O>*>(std::addressof(out));
+			}
+			
 			return HandleEntryPoint(a_entryPoint, a_perkOwner, flags, o, category, channel, { a_args... });
+
+			if constexpr (valid_collect) {
+				//Submit flags
+				out = collector.out;
+			}
 		}
 	}
 

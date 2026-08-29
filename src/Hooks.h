@@ -33,6 +33,13 @@ namespace PEPE
 		return 0;
 	}
 
+	void NullifyInstructions(uintptr_t address, size_t num)
+	{
+		while (num-- != 0) {
+			REL::safe_write((uintptr_t)address, 0x90);
+		}
+	}
+
 
 
 	struct EntryPointPerkEntry__EvaluateConditionHook
@@ -102,7 +109,7 @@ namespace PEPE
 	{
 		static void Patch()
 		{
-			//SE: (0x2DDA40), AE: (0x2F3C80), VR: ???
+			//SE: 2DDA40, AE: 2F3C80, VR: ???
 			auto hook_addr = REL::RelocationID(21187, 21644).address();
 			auto return_addr = hook_addr + 0x6;
 			//*
@@ -123,8 +130,10 @@ namespace PEPE
 
 			auto placed_call = IsCallOrJump(hook_addr) > 0;
 
-			auto place_query = trampoline.write_branch<5>(hook_addr, (uintptr_t)thunk);
+			NullifyInstructions(hook_addr, 6);
 
+			auto place_query = trampoline.write_branch<5>(hook_addr, (uintptr_t)thunk);
+			
 			if (!placed_call)
 				func = (uintptr_t)code.getCode();
 			else
@@ -375,7 +384,7 @@ namespace PEPE
 		inline static REL::Relocation<bool(RE::TESCondition&, RE::TESObjectREFR*, RE::TESObjectREFR*)> func;
 	};
 
-
+	//TODO: Move to PEE
 	struct TEMP_RedoAttackDamageHook
 	{
 		static void  Patch()
@@ -437,7 +446,7 @@ namespace PEPE
 
 			SKSE::AllocTrampoline(14 * 5);
 #ifndef NDEBUG
-			TEMP_RedoAttackDamageHook::Patch();
+			//TEMP_RedoAttackDamageHook::Patch();
 #endif
 			//No need for allocation, YAAAAAY!
 			ForEachPerkEntryHook::Install();

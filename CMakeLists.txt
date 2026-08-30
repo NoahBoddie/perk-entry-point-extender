@@ -6,7 +6,7 @@ message("Using toolchain file ${CMAKE_TOOLCHAIN_FILE}.")
 ########################################################################################################################
 project(
         PerkEntryPointExtender
-        VERSION 2.3.4.0
+        VERSION 2.3.6.0
         DESCRIPTION "Expands entry points and exposes them through papyrus functions."
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)

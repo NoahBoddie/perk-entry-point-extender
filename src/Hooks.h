@@ -33,10 +33,13 @@ namespace PEPE
 		return 0;
 	}
 
-	void NullifyInstructions(uintptr_t address, size_t num)
+	void NullifyInstructions(uintptr_t address, size_t num, size_t place_size = 5)
 	{
+		address += place_size;
+		num -= place_size;
+
 		while (num-- != 0) {
-			REL::safe_write((uintptr_t)address, 0x90);
+			REL::safe_write(address, 0x90);
 		}
 	}
 
@@ -77,7 +80,7 @@ namespace PEPE
 		{
 			auto& trampoline = SKSE::GetTrampoline();
 
-			//SE: 628C20, AE: 660A70, VR: ???
+			//SE: 628C20, AE(640): 660A70, VR: 631AF0
 			auto hit_hook = REL::RelocationID(37673, 38627);
 			
 			func = trampoline.write_call<5>(hit_hook.address() + RELOCATION_OFFSET(0x185, 0x194), thunk);
@@ -109,7 +112,7 @@ namespace PEPE
 	{
 		static void Patch()
 		{
-			//SE: 2DDA40, AE: 2F3C80, VR: ???
+			//SE: 2DDA40, AE: 2F3C80, VR: 2EEF50
 			auto hook_addr = REL::RelocationID(21187, 21644).address();
 			auto return_addr = hook_addr + 0x6;
 			//*
@@ -168,9 +171,8 @@ namespace PEPE
 	{
 		static void Install()
 		{
-			//SE: (0x338060), AE: (0x3500A0), VR: ???
+			//SE: 338060, AE: 3500A0, VR: 347920
 			auto hook_addr = REL::RelocationID(23346, 23815).address() + RELOCATION_OFFSET(0x109, 0x124);
-			//*
 
 			auto& trampoline = SKSE::GetTrampoline();
 
@@ -178,13 +180,9 @@ namespace PEPE
 
 			auto place_query = trampoline.write_call<6>(hook_addr, (uintptr_t)thunk);
 
-			
-
 			if (placed_call)
 				func = place_query;
 
-			//logger::info("Condition_HasKeywordHook complete...");
-			//*/
 		}
 
 		static bool thunk(RE::BGSPerk* a_this, const char* a_str)
@@ -243,7 +241,7 @@ namespace PEPE
 	{
 		static void Install()
 		{
-			//SE: (337660), AE: (34F4B0), VR: ???
+			//SE: 337660, AE: 34F4B0, VR: 346F20
 			auto hook_addr = REL::RelocationID(23332, 23800).address();
 
 			struct Code : Xbyak::CodeGenerator
